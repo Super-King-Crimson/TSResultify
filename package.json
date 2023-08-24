@@ -2,17 +2,12 @@
   "name": "ts-resultify",
   "version": "1.0.0",
   "description": "A minimal result implementation that allows you to turn any fallible function into a Pass/Fail enum",
-  "main": "dist/index.js",
+  "main": "src/result.ts",
   "type": "module",
   "scripts": {
     "build": "tsc"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-  },
-  "devDependencies": {
-    "typescript": "^5.1.6"
-  }
+  "author": "skc",
+  "license": "ISC"
 }
