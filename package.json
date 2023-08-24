@@ -1,6 +1,6 @@
 {
   "name": "ts-resultify",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A minimal result implementation that allows you to turn any fallible function into a Pass/Fail enum",
   "main": "src/result.ts",
   "type": "module",
