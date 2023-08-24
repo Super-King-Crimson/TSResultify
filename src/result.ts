@@ -1,4 +1,10 @@
 abstract class _Result<T, E> {
+    /** 
+     * # Usage
+     * Converts a `_Result<T, E`> into a `Pass<T>` or a `Fail<E>`, so it can be used as a `Result<T, E>`.
+     * 
+     * Only should be used internally.
+    */
     private into(): Result<T, E> {
         if (this.passed()) {
             return new Pass(this.unwrap());
@@ -61,19 +67,49 @@ abstract class _Result<T, E> {
      * let pass = new Pass(["tuple", true]);
      * let fail = new Fail(10);
      * 
-     * const fn = ([arg0, arg1]) => { arg1 ? arg0.length : -1 }
+     * const fn = ([arg0, arg1]: [string, boolean]) => arg1 ? arg0.length : -1;
      * 
      * assertEq(pass.map(fn), 5);
      * assert(fail.map(fn).failed());
      * ```
      * # Caveats
-     * If your map produces its own Result, consider using `flatMap` or `andThen` to avoid dealing with nested Results.
+     * If your map produces its own Result, consider using `andThen` to avoid dealing with nested Results.
     */
     map<U>(f: (value: T) => U): Result<U, E> {
         return this.passed() ? new Pass(f(this.unwrap())) : new Fail(this.expectFail());
     };
 
-    flatMap<U>(f: (value: T) => Result<U, E>): Result<U, E> {
+    /**
+    * # Usage
+    * Returns a new `Result` that contains the return value of `f` called on the inner Fail value,
+    * or a Some value if the variant was `Some`.
+    * 
+    * # Examples
+    * ```ts
+    * //Usecase is converting a `Fail` of one type into another type
+    * let pass = new Pass(10);
+    * let bigFail = new Fail("I'm big!");
+    * let smallFail = new Fail("I'm small.");
+    * 
+    * const fn = (errMsg: string) => errMsg.includes("fixable") ? 10000 : 0;
+    * 
+    * assertEq(pass.mapErr(fn).unwrap(), 10);
+    * assertEq(bigFail.mapErr(fn).expectFail(), 10000);
+    * assertEq(smallFail.mapErr(fn).expectFail(), 0);
+    * ```
+    * 
+    * # Caveats
+    * If instead you want to convert an `Fail` into a `Pass`, use `orElse`.
+    */
+    mapErr<F>(f: (error: E) => F): Result<T, F> {
+        return this.failed() ? new Fail(f(this.expectFail())) : new Pass(this.unwrap());
+    };
+
+    /**
+     * # Usage
+     * Returns the current `Fail` value, or creates a new `Result` by calling `f` on the inner `Pass` value.
+    */
+    andThen<U>(f: (value: T) => Result<U, E>): Result<U, E> {
         if (this.passed()) {
             return f(this.unwrap());
         } else {
@@ -81,17 +117,17 @@ abstract class _Result<T, E> {
         }
     }
 
-    flatMapErr<F>(f: (error: E) => Result<T, F>): Result<T, F> {
+    /**
+     * # Usage
+     * Returns the current `Pass` value, or creates a new `Result` by calling `f`on the inner `Fail` value.
+    */
+    orElse<F>(f: (error: E) => Result<T, F>): Result<T, F> {
         if (this.failed()) {
             return f(this.expectFail());
         } else {
             return new Pass(this.unwrap());
         }
     }
-
-    mapErr<F>(f: (error: E) => F): Result<T, F> {
-        return this.failed() ? new Fail(f(this.expectFail())) : new Pass(this.unwrap());
-    };
 
     /** 
      * # Usage
@@ -124,17 +160,97 @@ abstract class _Result<T, E> {
     nullify(): T | undefined {
         return this.passed() ? this.unwrap() : undefined;
     };
-    
-    andThen = this.flatMap
 
-    orElse = this.flatMapErr
-
+    /** 
+    * # Usage
+    * Accepts a function `f` who's first argument is the current result. Meant for method chaining.
+    * 
+    * # Examples
+    * ```ts
+    * const fallible = (cond: boolean) => cond ? new Pass(10) : new Fail("nope");
+    * const fallible2 = (value: number) => number > 5 ? new Pass("nice!") : new Fail(101);
+    * 
+    * fallible().andThen(fallible2).inspect((result) => {
+    *   if (result.passed()) {
+    *       console.log(`We have a value: ${result.unwrap()}`);
+    *   } else {
+    *       console.log(`No value, your err is ${result.expectFail()}`);  
+    *   }
+    * });
+    * ```
+    */
     inspect(f: (result: Result<T, E>) => void): Result<T, E> {
-        let spaghet = this.into();
-        f(spaghet);
-        return spaghet;
+        let result = this.into();
+        f(result);
+        return result;
     }
 
+    /**
+     * # Usage
+     * Accepts a function `f` that is only run if the inner variant is `Pass`.
+     * 
+     * # Examples
+     * ```ts
+     * let didItRun = false;
+     * 
+     * const fail = new Fail("nope");
+     * fail.inspectPass((value) => didItRun = true);
+     * assertN(didItRun);
+     * 
+     * const pass = new Pass(10);
+     * pass.inspectPass((value) => didItRun = true);
+     * assert(didItRun);
+     * ```
+    */
+    inspectPass(f: (value: T) => void): Result<T, E> {
+        if (this.passed()) {
+            f(this.unwrap());
+        }
+
+        return this.into();
+    }
+
+    /** 
+     * # Usage
+     * Accepts a function `f` that is only run if the inner variant is `Fail`.
+     * 
+     * # Examples
+     * ```ts
+     * let didItRun = false;
+     * 
+     * const pass = new Pass(10);
+     * pass.inspectPass((value) => didItRun = true);
+     * assertN(didItRun);
+     * 
+     * const fail = new Fail("nope");
+     * fail.inspectPass((value) => didItRun = true);
+     * assert(didItRun);
+     * ```
+    */
+    inspectFail(f: (error: E) => void): Result<T, E> {
+        if (this.failed()) {
+            f(this.expectFail());
+        }
+
+        return this.into();
+    }
+
+    /**
+     * # Usage
+     * Accepts two functions: `onPass`, which will run if the inner variant is `Pass`, and `onFail`, which will run if the inner variant is `Fail`.
+     * 
+     * # Examples
+     * ```ts
+     * const onPass = (_: any) => 6;
+     * const onFail = (_: any) => 7;
+     * 
+     * let pass = new Pass(10);
+     * let fail = new Fail("fail");
+     * 
+     * assertEq(pass.match(onPass, onFail), 6);
+     * assertEq(fail.match(onPass, onFail), 7);
+     * ```
+    */
     match<R>(onPass: (value: T) => R, onFail: (error: E) => R): R {
         if (this.passed()) {
             return onPass(this.unwrap());
@@ -208,7 +324,7 @@ export type Result<T, E> = Pass<T> | Fail<E>;
  * ```
  * # Caveats
  * `resultify` is known to wrongly infer types when given an overloadable function.
- * To fix this, pass it a closure that just calls your function and returns its value, as seen in the `resultifyPromise` example
+ * To fix this, pass it a closure that just calls your function and returns its value, as seen in the `resultifyPromise` example.
 */
 export function resultify<A extends any[], T>(f: (...args: A) => T, ...args: A): Result<T, Error> {
     try {
@@ -234,7 +350,7 @@ export function resultify<A extends any[], T>(f: (...args: A) => T, ...args: A):
  * 
  * If the Promise throws an error, this function wraps it in a `Fail` variant and returns it.
  * 
- * If the Promise is fulfilled, but its value returns a `Fail` variant when passed into `resultify`,
+ * If the Promise is fulfilled, but returns a `Fail` when passed into `resultify`
  * the returned promise will also contain a `Fail`.
  * 
  * # Examples
@@ -242,14 +358,14 @@ export function resultify<A extends any[], T>(f: (...args: A) => T, ...args: A):
  * import { readFile } from "fs/promises";
  * 
  * const file = await resultifyPromise(readFile, "something.txt", "utf8");
- * const withProperlyInferredTypes = await resultifyPromise(() => readFile("something.txt", "utf8"));
  * ```
  * 
  * # Caveats
  * Like `resultify`, this function is known to wrongly infer types when given an overloadable function.
- * To fix this, pass it a closure that just calls your function and returns its value, as shown in the example
- * 
- * 
+ * To fix this, pass it a closure that just calls your function and returns its value, like so:
+ * ```ts
+ * const withProperlyInferredTypes = await resultifyPromise(() => readFile("something.txt", "utf8"));
+ * ```
 */
 export async function resultifyPromise<A extends any[], T>(asyncFn: (...args: A) => Promise<T>, ...args: A): Promise<Result<T, Error>> {
     return asyncFn(...args)
